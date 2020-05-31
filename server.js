@@ -31,12 +31,39 @@ let schema = mongoose.Schema({
     required: true,
   },
 });
+
 var Model = mongoose.model("model", schema, "myCollection");
-// var doc1 = new Model({ url: "test", active: true });
-// doc1.save(function (err, doc) {
-//   if (err) return console.error(err);
-//   console.log("Document inserted succussfully!");
-// });
+
+var saveUrl = (url) => {
+  var doc1 = new Model({ url: url, active: true });
+  doc1.save(function (err, doc) {
+    if (err) return console.error(err);
+    console.log("Document inserted succussfully!");
+  });
+  return doc1._id;
+};
+
+var delUrl = (id) => {
+  Model.findByIdAndDelete(id, function (err) {
+    if (err) console.log(err);
+    console.log("Successful deletion");
+  });
+};
+
+var toggleUrl = (id) => {
+  Model.findById(id, function (err, doc) {
+    if (err) console.log(err);
+    doc.active = !doc.active;
+    doc.save(function (err) {
+      if (err) console.log(err);
+      var json = {
+        content: doc,
+        status: "toggle-url",
+      };
+      wss.broadcast(JSON.stringify(json));
+    });
+  });
+};
 
 router.route("/fetch").get(function (req, res) {
   Model.find({}, function (err, result) {
@@ -48,17 +75,23 @@ router.route("/fetch").get(function (req, res) {
   });
 });
 
-// var query = { address: /^S/ };
-// db.collection("myCollection").find(query).toArray(function(err, result) {
 Model.find({}, function (err, result) {
   if (err) {
     console.log("error");
     throw err;
   }
-  console.log(result);
   crawlList = result;
-  // db.close();
 });
+
+var getUrls = () => {
+  Model.find({}, function (err, result) {
+    if (err) {
+      console.log("error");
+      throw err;
+    }
+    crawlList = result;
+  });
+};
 
 //#endregion
 
@@ -79,30 +112,51 @@ var server = app.listen(port, function () {
 //#region websocket
 const SocketServer = require("ws").Server;
 const wss = new SocketServer({ server });
-var connectedUsers = [];
+var clients = [];
+
+wss.broadcast = function (data) {
+  for (var i in clients) {
+    clients[i].send(data);
+  }
+};
+
 //init websocket ws and handle incomming request
 wss.on("connection", (ws) => {
+  clients.push(ws);
   console.log("Client connected");
   ws.on("close", () => console.log("Client disconnected"));
 
-  ws.send(JSON.stringify({data: crawlList, status:"success"}));
+  // on receive message
+  ws.on("message", function incoming(message) {
+    let data = JSON.parse(message);
+    console.log(data);
+    switch (data.status) {
+      case "add-url":
+        var newid = saveUrl(data.content);
+        var json = {
+          content: { _id: newid, url: data.content, active: true },
+          status: "add-url",
+        };
+        wss.broadcast(JSON.stringify(json));
+        break;
+      case "del-url":
+        delUrl(data.content);
+        var json = {
+          content: data.content,
+          status: "del-url",
+        };
+        wss.broadcast(JSON.stringify(json));
+        break;
+      case "toggle-url":
+        console.log(data.content);
+        toggleUrl(data.content);
+        break;
+      default:
+        console.log("error: " + data);
+    }
+  });
+  getUrls();
+  ws.send(JSON.stringify({ content: crawlList, status: "url-list" }));
 });
 
-// setInterval(() => {
-//   wss.clients.forEach((client) => {
-//     client.send(new Date().toTimeString());
-//   });
-// }, 1000);
-
-// wss.on('connection', function connection(ws){
-//   console.log("connection ...");
-
-//   //on connect message
-//   wss.on('message', function incoming(message){
-//     console.log('received %s', message);
-//     connectedUsers.push(message);
-//   });
-
-//   ws.send('something');
-// });
 //#endregion
