@@ -160,3 +160,35 @@ wss.on("connection", (ws) => {
 });
 
 //#endregion
+
+//#region webscraper
+// const puppeteer = require('puppeteer');
+const twitter = require('./twitter');
+
+async function getTweets() {
+  await twitter.initialize();
+  // return await twitter.getTweets('realDonaldTrump');
+  var tweets = await twitter.getTweets('richerzhagen');
+  console.log("success async function gettweets");
+  console.log(tweets);
+}
+// try {
+  getTweets();
+  console.log("success try");
+// } catch (error) {
+//   console.log(error);
+// }
+
+
+// (async getTweets() => {
+//     await twitter.initialize();
+
+//     // 
+//     //let user = await twitter.getUser('realDonaldTrump');
+    
+//     // let tweets = await twitter.getTweets('realDonaldTrump');
+//     return await twitter.getTweets('realDonaldTrump');
+
+// // debugger;
+// })();
+//#endregion
